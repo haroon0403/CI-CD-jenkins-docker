@@ -1,62 +1,53 @@
-pipeline {
+pipeline{
     agent any
-	
-	  tools
-    {
-       maven "Maven"
-    }
- stages {
-      stage('checkout') {
-           steps {
-             
-                git branch: 'master', url: 'https://github.com/devops4solutions/CI-CD-using-Docker.git'
-             
-          }
+    stages{
+        stage('git Clone'){
+            steps{
+                git 'https://github.com/haroon0403/CI-CD-jenkins-docker.git'
+            }
         }
-	 stage('Execute Maven') {
-           steps {
-             
-                sh 'mvn package'             
-          }
+        stage('Execute mvn'){
+            steps{
+               sh 'mvn package'
+            }
         }
-        
+        stage('Docker Build and Tag'){
+            steps{
+                sh 'docker image build -t $JOB_NAME:v1.$BUILD_ID .'
+                sh 'docker image tag $JOB_NAME:v1.$BUILD_ID 0403456/$JOB_NAME:v1.$BUILD_ID'
+                sh 'docker image tag $JOB_NAME:v1.$BUILD_ID 0403456/$JOB_NAME:latest'
+                sh 'docker rmi 0403456/$JOB_NAME:v1.$BUILD_ID'
+                sh 'docker rmi $JOB_NAME:v1.$BUILD_ID '
+            }
+        }
+     /*   stage('push image to docker hub'){
+            steps{
+                withCredentials([string(credentialsId: 'dockerhubpassword', variable: 'dockerhubpassword')]) {
+                sh 'docker login -u 0403456 -p $dockerhubpassword'
+              //sh 'docker image push 0403456/$JOB_NAME:v1.$BUILD_ID'
+                sh 'docker image push 0403456/$JOB_NAME:latest'
+                
+             } 
+        }  */
+        stage('Docker stop and remove'){
+            steps{
+                sh 'docker ps -q -f status=running | xargs --no-run-if-empty docker container stop'
+                sh 'docker ps -q -f status=exited | xargs --no-run-if-empty docker rm'
+            }
+        }
+        stage('Run Docker container on Jenkins Agent'){
+            steps{
+              //sh "docker run -d -p 8003:8080 0403456/$JOB_NAME:v1.$BUILD_ID"
+                sh "docker run -d -p 8003:8080 0403456/$JOB_NAME:latest"
+            }
+         }
+         
+        stage('Deploy on kubernetes through ansible'){
+            steps{
+                sh "ansible-playbook /ansible/task.yaml"
+            }
+        }
 
-  stage('Docker Build and Tag') {
-           steps {
-              
-                sh 'docker build -t samplewebapp:latest .' 
-                sh 'docker tag samplewebapp nikhilnidhi/samplewebapp:latest'
-                //sh 'docker tag samplewebapp nikhilnidhi/samplewebapp:$BUILD_NUMBER'
-               
-          }
         }
-     
-  stage('Publish image to Docker Hub') {
-          
-            steps {
-        withDockerRegistry([ credentialsId: "dockerHub", url: "" ]) {
-          sh  'docker push nikhilnidhi/samplewebapp:latest'
-        //  sh  'docker push nikhilnidhi/samplewebapp:$BUILD_NUMBER' 
-        }
-                  
-          }
-        }
-     
-      stage('Run Docker container on Jenkins Agent') {
-             
-            steps 
-			{
-                sh "docker run -d -p 8003:8080 nikhilnidhi/samplewebapp"
- 
-            }
-        }
- stage('Run Docker container on remote hosts') {
-             
-            steps {
-                sh "docker -H ssh://jenkins@172.31.28.25 run -d -p 8003:8080 nikhilnidhi/samplewebapp"
- 
-            }
-        }
+
     }
-	}
-    
